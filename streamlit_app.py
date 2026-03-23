@@ -4,8 +4,8 @@ import os
 import subprocess
 from datetime import datetime
 #from streamlit_autorefresh import st_autorefresh
-import cv2
-import face_recognition
+#import cv2
+#import face_recognition
 import pickle
 import numpy as np
 import time
