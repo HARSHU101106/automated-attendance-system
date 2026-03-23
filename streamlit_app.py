@@ -3,7 +3,7 @@ import pandas as pd
 import os
 import subprocess
 from datetime import datetime
-from streamlit_autorefresh import st_autorefresh
+#from streamlit_autorefresh import st_autorefresh
 import cv2
 import face_recognition
 import pickle
@@ -20,7 +20,7 @@ st.set_page_config(
 )
 
 # Auto refresh every 5 sec
-st_autorefresh(interval=5000, key="refresh")
+#st_autorefresh(interval=5000, key="refresh")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 FILE_PATH = os.path.join(BASE_DIR, "excel", "attendance.xlsx")
