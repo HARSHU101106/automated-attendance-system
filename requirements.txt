@@ -1,4 +1,7 @@
 streamlit
+streamlit-autorefresh
 pandas
 openpyxl
 numpy
+opencv-python-headless
+face_recognition

@@ -3,9 +3,9 @@ import pandas as pd
 import os
 import subprocess
 from datetime import datetime
-#from streamlit_autorefresh import st_autorefresh
-#import cv2
-#import face_recognition
+from streamlit_autorefresh import st_autorefresh
+import cv2
+import face_recognition
 import pickle
 import numpy as np
 import time
@@ -20,7 +20,7 @@ st.set_page_config(
 )
 
 # Auto refresh every 5 sec
-#st_autorefresh(interval=5000, key="refresh")
+st_autorefresh(interval=5000, key="refresh")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 FILE_PATH = os.path.join(BASE_DIR, "excel", "attendance.xlsx")
@@ -85,62 +85,32 @@ if option == "Dashboard":
 elif option == "Start Attendance":
 
     st.title("🎥 Smart Attendance System")
-    st.warning("⚠️ Camera feature works only in local system")
+    st.info("📸 Allow camera access in your browser, then take a photo to mark attendance.")
 
-    st.info("💻 Please run this project locally to use face recognition")
+    encoding_path = os.path.join(BASE_DIR, "encodings", "encodings.pkl")
 
-    st.markdown("""
-    ### 🔧 How to use locally:
-    1. Open terminal  
-    2. Run: `py -3.12 -m streamlit run streamlit_app.py`  
-    3. Click Start Camera  
-    """)
-
-    col1, col2 = st.columns(2)
-
-    # START BUTTON
-    if col1.button("🚀 Start Camera"):
-        st.session_state.camera_on = True
-
-    # STOP BUTTON
-    if col2.button("🛑 Stop Camera"):
-        st.session_state.camera_on = False
-
-    frame_placeholder = st.empty()
-
-    #import cv2
-    #import face_recognition
-    import numpy as np
-    import pickle
-    import time
-
-    if st.session_state.camera_on:
-
-        BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-        encoding_path = os.path.join(BASE_DIR, "encodings", "encodings.pkl")
-
+    if not os.path.exists(encoding_path):
+        st.error("❌ Encodings file not found. Please generate encodings first (run encode.py).")
+    else:
         with open(encoding_path, "rb") as f:
             data = pickle.load(f)
 
-        cam = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+        # Browser-based camera works both locally and on Streamlit Cloud
+        photo = st.camera_input("Take a photo to mark attendance")
 
-        frame_placeholder = st.empty()
-        marked_names = set()
+        if photo is not None:
+            from backend.attendance import mark_attendance
 
-        st.success("📸 Camera Running...")
-
-        while st.session_state.camera_on:
-
-            ret, frame = cam.read()
-            if not ret:
-                st.error("Camera error")
-                break
-
-            frame = cv2.resize(frame, (640, 480))
+            # Decode the captured photo into an OpenCV image
+            file_bytes = np.asarray(bytearray(photo.getvalue()), dtype=np.uint8)
+            frame = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
             faces = face_recognition.face_locations(rgb)
             encodings = face_recognition.face_encodings(rgb, faces)
+
+            if len(faces) == 0:
+                st.warning("😕 No face detected. Please try again.")
 
             for encoding, (top, right, bottom, left) in zip(encodings, faces):
 
@@ -158,38 +128,23 @@ elif option == "Start Attendance":
                         confidence_text = f"{confidence:.1f}%"
                         color = (0, 255, 0)  # Green for known
 
-                        # Mark attendance only once
-                        if name not in marked_names:
-                            from backend.attendance import mark_attendance
-                            mark_attendance(name)
-                            marked_names.add(name)
-
-                            # ✅ AUTO STOP AFTER MARKING
-                            st.success(f"✅ Attendance marked for {name}")
-                            time.sleep(2)
-                            st.session_state.camera_on = False
-                            break
+                        if mark_attendance(name):
+                            st.success(f"✅ Attendance marked for {name} ({confidence_text})")
+                        else:
+                            st.info(f"ℹ️ {name} already marked today ({confidence_text})")
+                    else:
+                        st.warning("⚠️ Face detected but not recognized.")
 
                 # 🎨 Draw clean UI box
                 cv2.rectangle(frame, (left, top), (right, bottom), color, 2)
-
-                # Background for text
                 cv2.rectangle(frame, (left, top - 30), (right, top), color, -1)
 
                 label = f"{name} {confidence_text}"
-
                 cv2.putText(frame, label, (left + 5, top - 8),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
 
-            frame_placeholder.image(frame, channels="BGR")
+            st.image(frame, channels="BGR", caption="Result")
 
-            if not st.session_state.camera_on:
-                break
-
-            time.sleep(0.03)
-
-        cam.release()
-        cv2.destroyAllWindows()
 # ------------------ ANALYTICS ------------------
 elif option == "Analytics":
 
