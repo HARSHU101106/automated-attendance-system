@@ -6,5 +6,4 @@ numpy<2
 opencv-python-headless
 setuptools<80
 dlib-bin==19.24.6
-face_recognition
 face_recognition_models
