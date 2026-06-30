@@ -5,10 +5,52 @@ import subprocess
 from datetime import datetime
 from streamlit_autorefresh import st_autorefresh
 import cv2
-import face_recognition
+import dlib
+import face_recognition_models
 import pickle
 import numpy as np
 import time
+
+# ------------------ FACE RECOGNITION (direct dlib, no source build) ------------------
+# Using dlib + face_recognition_models directly avoids the `face_recognition`
+# wrapper, which would force dlib to compile from source and fail on Streamlit
+# Cloud. The models match what encode.py used, so encodings.pkl stays compatible.
+@st.cache_resource
+def _load_face_models():
+    detector = dlib.get_frontal_face_detector()
+    pose_predictor = dlib.shape_predictor(
+        face_recognition_models.pose_predictor_five_point_model_location()
+    )
+    encoder = dlib.face_recognition_model_v1(
+        face_recognition_models.face_recognition_model_location()
+    )
+    return detector, pose_predictor, encoder
+
+
+def face_locations(rgb):
+    detector, _, _ = _load_face_models()
+    return [
+        (max(d.top(), 0), d.right(), d.bottom(), max(d.left(), 0))
+        for d in detector(rgb, 1)
+    ]
+
+
+def face_encodings(rgb, locations):
+    _, pose_predictor, encoder = _load_face_models()
+    encs = []
+    for (top, right, bottom, left) in locations:
+        rect = dlib.rectangle(left, top, right, bottom)
+        shape = pose_predictor(rgb, rect)
+        encs.append(np.array(encoder.compute_face_descriptor(rgb, shape, 1)))
+    return encs
+
+
+def face_distance(known_encodings, encoding):
+    if len(known_encodings) == 0:
+        return np.empty(0)
+    return np.linalg.norm(np.asarray(known_encodings) - encoding, axis=1)
+
+
 if "camera_on" not in st.session_state:
     st.session_state.camera_on = False
 
@@ -106,8 +148,8 @@ elif option == "Start Attendance":
             frame = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
-            faces = face_recognition.face_locations(rgb)
-            encodings = face_recognition.face_encodings(rgb, faces)
+            faces = face_locations(rgb)
+            encodings = face_encodings(rgb, faces)
 
             if len(faces) == 0:
                 st.warning("😕 No face detected. Please try again.")
@@ -119,7 +161,7 @@ elif option == "Start Attendance":
                 confidence_text = ""
 
                 if len(data["encodings"]) > 0:
-                    distances = face_recognition.face_distance(data["encodings"], encoding)
+                    distances = face_distance(data["encodings"], encoding)
                     best_match = np.argmin(distances)
 
                     if distances[best_match] < 0.5:
